@@ -1,5 +1,5 @@
-RadarBeats.pde
-==============
+RadarBeats
+==========
 
 For completion of requirements for Creative Programming for Digital
 Media & Mobile Apps at Coursera.
