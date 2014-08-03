@@ -1,47 +1,33 @@
 /*************************************************************************
- * BeatThreads.pde 
- * 
- * Author: Eugene Jarder
- *
- * For completion of requirements for Creative Programming for Digital 
- * Media & Mobile Apps at Coursera.
- *
- * This is the product of the developer playing around with the gravity of
- * the world. Whenever the user presses the mouse down, the balls will
- * move towards the direction of the mouse. As you move the mouse around,
- * the balls will form threads on the screen. The color of the balls will
- * also change to the beat of the music.
- * 
- * The music used was taken from the following link:
- *   - https://www.freesound.org/people/bigjoedrummer/sounds/77293/
- * I chose a rock beat because the beat is more obvious to our ears.
- *
- * Code is found on the following link:
- *   - https://github.com/ejjarder/BeatThreads
- *
- * Known bug: There is a chance that the balls will not move when the
- * mouse is presses. The developer is not sure why this happens.
+ * RadarBeats.pde
  *
  *************************************************************************/
 
 private static final int OCTAVE = 7;
 private static final int BEAT_COUNT = 16;
-private static final int SCREEN_WIDTH = 640;
-private static final int SCREEN_HEIGHT = 400;
-private static final int NOTES_WIDTH = 640;
-private static final int NOTES_HEIGHT = 357;
-private static final int BEAT_WIDTH = floor(NOTES_WIDTH / BEAT_COUNT);
-private static final int BEAT_HEIGHT = floor(NOTES_HEIGHT / OCTAVE);
+private static final int TOTAL_NOTES = OCTAVE * BEAT_COUNT;
+private static final int SCREEN_WIDTH = 800;
+private static final int SCREEN_HEIGHT = 720;
+private static final int RADAR_CENTER_X = 478;
+private static final int RADAR_CENTER_Y = SCREEN_HEIGHT / 2;
+private static final int MIN_CIRCLE_RADIUS = 36;
+private static final int MAX_CIRCLE_RADIUS = 312;
+private static final float ARC_WIDTH = TWO_PI / BEAT_COUNT;
+private static final float ARC_HEIGHT = (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS) / OCTAVE;
 private static final int FRAME_RATE = 60;
 private static final int MIN_BPM = 60;
 private static final int DEFAULT_BPM = 120;
 private static final int MAX_BPM = 300;
-private static final int SLIDERS_Y = 360;
-private static final int SLIDERS_X1 = 10;
-private static final int SLIDERS_X2 = 270;
 private static final int DEFAULT_KEY = 0;
-private static final int MIN_KEY = -2;
+private static final int MIN_KEY = -3;
 private static final int MAX_KEY = 8;
+private static final float MIN_FREQUENCY = 0.1;
+private static final float MAX_FREQUENCY = 5;
+private static final int MIN_RANDOM_NOTES = 10;
+private static final int MAX_RANDOM_NOTES = 43;
+private static final float NOTE_INTERVAL = pow(2, 1.0/12);
+
+PVector zeroVector = new PVector(1, 0);
 
 Maxim maxim;
 
@@ -49,7 +35,8 @@ WavetableSynth synths[] = new WavetableSynth[OCTAVE];
 
 float[] wavetable = new float[514];
 
-float[] octave = {
+float[] octave = 
+{
   261.62558f, // C4
   293.664764f, // D4
   329.627563f, // E4
@@ -59,7 +46,9 @@ float[] octave = {
   493.883301f // B4
 };
 
-boolean tracks[][];
+int[] octaveColors = new int[OCTAVE]; 
+
+boolean notes[][];
 
 int currentNote = 0;
 
@@ -70,6 +59,9 @@ Slider waveFrequency2;
 Slider bpmSlider;
 Slider keySlider;
 
+Button randomize;
+Button clear;
+
 int bpm;
 int newBPM;
 float bps;
@@ -78,30 +70,72 @@ int maxFramesPerBeat;
 int currentKey = 0;
 int newKey = 0;
 
+int backgroundColor = 76;
+
+AudioPlayer metronome;
+
 void setup()
 {
   size(SCREEN_WIDTH, SCREEN_HEIGHT);
   maxim = new Maxim(this);
   frameRate(FRAME_RATE);
   strokeWeight(2);
+  ellipseMode(RADIUS);
   
-  tracks = new boolean[BEAT_COUNT][OCTAVE];
+  notes = new boolean[BEAT_COUNT][OCTAVE];
   
   for (int octaveIndex = 0; octaveIndex < OCTAVE; ++octaveIndex)
   {
     synths[octaveIndex] = maxim.createWavetableSynth(514);
     synths[octaveIndex].setFrequency(octave[octaveIndex]);
-  }
+    octaveColors[octaveIndex] = (int) map(octaveIndex, 0, OCTAVE, 0, 255);
+  } 
   
   newBPM = DEFAULT_BPM;
   updateBeat();
   
-  waveFrequency = new Slider("freq 1", 1, 0.1, 1.9, SLIDERS_X1, SLIDERS_Y, 250, 15, HORIZONTAL);
-  waveFrequency2 = new Slider("freq 2", 0, 0, 1.9, SLIDERS_X1, SLIDERS_Y + 20, 250, 15, HORIZONTAL);
-  bpmSlider = new Slider("bpm", DEFAULT_BPM, MIN_BPM, MAX_BPM, SLIDERS_X2, SLIDERS_Y, 250, 15, HORIZONTAL);
-  keySlider = new Slider("key", DEFAULT_KEY, MIN_KEY, MAX_KEY, SLIDERS_X2, SLIDERS_Y + 20, 250, 15, HORIZONTAL);
+  initializeGUI();
   
   updateWaveTable();
+  
+  metronome = maxim.loadFile("metronome.wav");
+  metronome.setLooping(false);
+  metronome.volume(1.0);
+}
+
+void initializeGUI()
+{
+  waveFrequency = new Slider("freq 1", 1, MIN_FREQUENCY, MAX_FREQUENCY, 10, 10, 47, 281, VERTICAL);
+  waveFrequency2 = new Slider("freq 2", 1, MIN_FREQUENCY, MAX_FREQUENCY, 10, 301, 47, 281, VERTICAL);
+  bpmSlider = new Slider("bpm", DEFAULT_BPM, MIN_BPM, MAX_BPM, 67, 10, 47, 281, VERTICAL);
+  keySlider = new Slider("key", DEFAULT_KEY, MIN_KEY, MAX_KEY, 67, 301, 47, 281, VERTICAL);
+  
+  randomize = new Button("randomize", 10, 602, 104, 42);
+  clear = new Button("clear", 10, 654, 104, 42); 
+}
+
+void putRandomNotes()
+{
+  for (int i = MIN_RANDOM_NOTES; i < MAX_RANDOM_NOTES; ++i)
+  {
+    int randomNote = (int) random(TOTAL_NOTES);
+    
+    int randomOctave = (int) randomNote / BEAT_COUNT;
+    int randomBeat = randomNote % BEAT_COUNT;
+    
+    notes[randomBeat][randomOctave] = true;
+  } 
+}
+
+void clearNotes()
+{
+  for (int arcIndex = 0; arcIndex < BEAT_COUNT; ++arcIndex)
+  {
+    for (int rIndex = OCTAVE - 1; rIndex >= 0; --rIndex)
+    {
+      notes[arcIndex][rIndex] = false;
+    }
+  }
 }
 
 void updateWaveTable()
@@ -119,7 +153,7 @@ void updateWaveTable()
   
   for (int i = 0; i < 514 ; i++) {
     wavetable[i] /= maxAmp;
-    wavetable[i] *= 0.75;
+    wavetable[i] *= 0.9;
   } 
 
   for (int octaveIndex = 0; octaveIndex < OCTAVE; ++octaveIndex)
@@ -131,14 +165,13 @@ void updateWaveTable()
 void draw()
 {
 // code that happens every frame
-  background(200);
+  background(76);
   updateBeat();
   updateFrequency();
+  updateWaveTable();
   playBeat();
-  drawTracks();
+  drawNotes();
   drawGUI();
-  println("currentKey = " + currentKey);
-  println("newKey = " + newKey);
 }
 
 void updateBeat()
@@ -162,7 +195,7 @@ void updateFrequency()
     currentKey = newKey;
     for (int octaveIndex = 0; octaveIndex < OCTAVE; ++octaveIndex)
     {
-      synths[octaveIndex].setFrequency(octave[octaveIndex] * pow(1.6, currentKey));
+      synths[octaveIndex].setFrequency(octave[octaveIndex] * pow(NOTE_INTERVAL, currentKey));
     }
     
     newKey = -13;
@@ -173,13 +206,9 @@ void playBeat()
 {
   int playHeadInBeat = (int) (playHead % framesPerBeat);
   
-  int currentBeat =  (int) map(playHead, 0, maxFramesPerBeat, 0, BEAT_COUNT);
-  
-  if (playHeadInBeat < FRAME_RATE / 2);
-  {
-    updateWaveTable();    
-    
-    boolean[] beatNotes = tracks[currentBeat];
+  if (playHeadInBeat < framesPerBeat / 2)
+  { 
+    boolean[] beatNotes = notes[getCurrentBeat()];
     
     for (int octaveIndex = 0; octaveIndex < OCTAVE; ++octaveIndex)
     {
@@ -191,13 +220,24 @@ void playBeat()
       else
       {
         synths[octaveIndex].ramp(0, 2);
-      }      
+      }
     }
-  
-    fill(127, 127);
-    rect(currentBeat * BEAT_WIDTH, 0, 
-         BEAT_WIDTH, NOTES_HEIGHT); 
+    
+    if (playHeadInBeat < framesPerBeat / 3)
+    { 
+      backgroundColor = (int) map(playHeadInBeat, 0, framesPerBeat / 3, 89, 76);
+    }
+    
+    if (playHeadInBeat < 1)
+    {
+      metronome.play();
+    }
   }
+}
+
+int getCurrentBeat()
+{
+  return (int) map(playHead, 0, maxFramesPerBeat, 0, BEAT_COUNT);
 }
 
 void drawGUI()
@@ -206,51 +246,106 @@ void drawGUI()
   waveFrequency2.display();
   bpmSlider.display();
   keySlider.display();
+  
+  randomize.display();
+  clear.display();
+  
+  displayValues();
+}
+
+void displayValues()
+{
+  fill(255);
+  
+  displaySliderValue(waveFrequency);
+  displaySliderValue(waveFrequency2);
+  displaySliderValue(bpmSlider);
+  displaySliderValue(keySlider, true);
+}
+
+void displaySliderValue(Slider slider)
+{
+  displaySliderValue(slider, false);
+}
+
+void displaySliderValue(Slider slider, boolean isInt)
+{
+  String displayValue;
+  
+  if (isInt)
+  {
+    displayValue = String.format("%d", (int) slider.get());
+  }
+  else
+  {
+    displayValue = String.format("%.1f", slider.get());
+  }
+  
+  text(displayValue, slider.pos.x + 10, slider.pos.y + (slider.extents.y / 2));
 }
 
 void drawGrid()
 {
   stroke(255);
   noFill();
-  rect(0, 0, NOTES_WIDTH, NOTES_HEIGHT);
   
-  for (int octIndex = 1; octIndex < OCTAVE; ++octIndex)
+  for (int i = 0; i < BEAT_COUNT / 2; ++i)
   {
-    int lineY = (int) map(octIndex, 0, OCTAVE, 0, NOTES_HEIGHT);
-    line(0, lineY, NOTES_WIDTH, lineY); 
+    float angle = map(i, 0, BEAT_COUNT / 2, 0, PI);
+    if (angle % HALF_PI == 0)
+    {
+      stroke(178, 0, 0);
+    }
+    else
+    {
+      stroke(178);
+    }
+    pushMatrix();
+      translate(RADAR_CENTER_X, RADAR_CENTER_Y);
+      rotate(angle);
+      line(-MAX_CIRCLE_RADIUS, 0, MAX_CIRCLE_RADIUS, 0);
+    popMatrix();
   }
   
-  for (int beatIndex = 1; beatIndex < BEAT_COUNT; ++beatIndex)
+  for (int i = 1; i < OCTAVE + 1; ++i)
   {
-    if (beatIndex % 4 == 0)
-    {
-      stroke(255, 0, 0);
-    } 
-    
-    int lineX = (int) map(beatIndex, 0, BEAT_COUNT, 0, NOTES_WIDTH);
-    line(lineX, 0, lineX, NOTES_HEIGHT);
-    
-    if (beatIndex % 4 == 0)
-    {
-      stroke(255);
-    } 
+    float radius = map(i, 0, OCTAVE, MIN_CIRCLE_RADIUS, MAX_CIRCLE_RADIUS);
+    ellipse(RADAR_CENTER_X, RADAR_CENTER_Y, radius, radius);
   }
+  
+  fill(backgroundColor);
+  ellipse(RADAR_CENTER_X, RADAR_CENTER_Y, MIN_CIRCLE_RADIUS, MIN_CIRCLE_RADIUS);
 }
 
-void drawTracks()
+void drawNotes()
 {
-  fill(255);
-  for (int xIndex = 0; xIndex < BEAT_COUNT; ++xIndex)
+  for (int arcIndex = 0; arcIndex < BEAT_COUNT; ++arcIndex)
   {
-    for (int yIndex = 0; yIndex < OCTAVE; ++yIndex)
+    for (int rIndex = OCTAVE; rIndex > 0; --rIndex)
     {
-      if (tracks[xIndex][yIndex])
+      if (notes[arcIndex][rIndex - 1])
       {
-        rect(xIndex * BEAT_WIDTH, yIndex * BEAT_HEIGHT, 
-             BEAT_WIDTH, BEAT_HEIGHT); 
+        colorMode(HSB);
+        fill(octaveColors[rIndex - 1], 89, 255);
+        colorMode(RGB);   
       }
+      else
+      {
+        fill(backgroundColor);
+      }
+      
+      float radius = map(rIndex, 0, OCTAVE, MIN_CIRCLE_RADIUS, MAX_CIRCLE_RADIUS);
+      
+      arc(RADAR_CENTER_X, RADAR_CENTER_Y, radius, radius, arcIndex * ARC_WIDTH, (arcIndex + 1) * ARC_WIDTH, PIE);
     }
   }
+  
+  fill(178, 127);
+  
+  int currentBeat = getCurrentBeat();
+  
+  arc(RADAR_CENTER_X, RADAR_CENTER_Y, MAX_CIRCLE_RADIUS, MAX_CIRCLE_RADIUS, currentBeat * ARC_WIDTH, (currentBeat + 1) * ARC_WIDTH, PIE);
+  
   drawGrid();
 }
 
@@ -266,23 +361,39 @@ void mouseDragged()
 
 void mousePressed()
 {
-  if (mouseY < NOTES_HEIGHT)
+  PVector mouseVector = new PVector(mouseX - RADAR_CENTER_X, mouseY - RADAR_CENTER_Y);
+  float mouseDist = mouseVector.mag();
+  if (mouseDist > MIN_CIRCLE_RADIUS && mouseDist < MAX_CIRCLE_RADIUS)
   {
-    int beatIndex = (int) map(mouseX, 0, NOTES_WIDTH, 0, BEAT_COUNT);
-    int octaveIndex = (int) map(mouseY, 0, NOTES_HEIGHT, 0, OCTAVE);
-    
-    tracks[beatIndex][octaveIndex] = !tracks[beatIndex][octaveIndex];
+    int octave = (int) map(mouseDist, MIN_CIRCLE_RADIUS, MAX_CIRCLE_RADIUS, 0, OCTAVE);
+    float a = PVector.angleBetween(zeroVector, mouseVector);
+    if (mouseVector.y < 0)
+    {
+      a = TWO_PI - a;
+    }
+    int beat = (int) map(a, 0, TWO_PI, 0, BEAT_COUNT);
+    notes[beat][octave] = !notes[beat][octave];
   }
-  
   waveFrequency.mousePressed();
   waveFrequency2.mousePressed();
   bpmSlider.mousePressed();
   keySlider.mousePressed();
   newBPM = (int) bpmSlider.get();
   newKey = (int) keySlider.get();
+  randomize.mousePressed();
+  clear.mousePressed();
 }
 
 void mouseReleased()
 {
+  if (randomize.mouseReleased())
+  {
+    putRandomNotes();
+  }
+  
+  if (clear.mouseReleased())
+  {
+    clearNotes();
+  }
 }
 
