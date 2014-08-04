@@ -57,14 +57,14 @@ private static final int BEAT_COUNT = 16;
 private static final int TOTAL_NOTES = OCTAVE.length * BEAT_COUNT;
 
 // Screen dimensions
-private static final int SCREEN_WIDTH = 800;
-private static final int SCREEN_HEIGHT = 720;
+private static final int SCREEN_WIDTH = 640;
+private static final int SCREEN_HEIGHT = 480;
 
 // Radar location and dimensions
-private static final int RADAR_CENTER_X = 478;
+private static final int RADAR_CENTER_X = 400;
 private static final int RADAR_CENTER_Y = SCREEN_HEIGHT / 2;
-private static final int MIN_CIRCLE_RADIUS = 36;
-private static final int MAX_CIRCLE_RADIUS = 312;
+private static final int MIN_CIRCLE_RADIUS = 10;
+private static final int MAX_CIRCLE_RADIUS = 230;
 
 // Arc properties derived from the above values
 private static final float ARC_WIDTH = TWO_PI / BEAT_COUNT;
@@ -184,16 +184,16 @@ void initializeBoard()
 void initializeGUI()
 {
   waveFrequency = new Slider("freq 1", 1, MIN_FREQUENCY, MAX_FREQUENCY,
-                             10, 10, 47, 281, VERTICAL);
+                             10, 10, 38, 187, VERTICAL);
   waveFrequency2 = new Slider("freq 2", 1, MIN_FREQUENCY, MAX_FREQUENCY,
-                              10, 301, 47, 281, VERTICAL);
+                              10, 207, 38, 187, VERTICAL);
   bpmSlider = new Slider("bpm", DEFAULT_BPM, MIN_BPM, MAX_BPM,
-                         67, 10, 47, 281, VERTICAL);
+                         58, 10, 38, 187, VERTICAL);
   keySlider = new Slider("key", DEFAULT_KEY, MIN_KEY, MAX_KEY,
-                         67, 301, 47, 281, VERTICAL);
+                         58, 207, 38, 187, VERTICAL);
   
-  randomize = new Button("randomize", 10, 602, 104, 42);
-  clear = new Button("clear", 10, 654, 104, 42); 
+  randomize = new Button("randomize", 10, 404, 73, 28);
+  clear = new Button("clear", 10, 442, 73, 28); 
 }
 
 /* putRandomNotes()
@@ -429,7 +429,7 @@ void displaySliderValue(Slider slider, boolean isInt)
     displayValue = String.format("%.1f", slider.get());
   }
   
-  text(displayValue, slider.pos.x + 10, slider.pos.y + (slider.extents.y / 2));
+  text(displayValue, slider.pos.x + 2, slider.pos.y + (slider.extents.y / 2));
 }
 
 /* drawGrid()
